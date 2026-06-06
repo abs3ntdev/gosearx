@@ -40,6 +40,9 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/gosearx ./cmd/gosearx
 
 # ---- Stage 3: runtime (debian-slim + bash + python3 for exec plugins) ----
 FROM debian:stable-slim AS runtime
+LABEL org.opencontainers.image.source="https://github.com/abs3ntdev/gosearx" \
+      org.opencontainers.image.description="gosearx — a Go metasearch engine with Lua/JS/exec engines & plugins, AI answer synthesis, and interactive finance charts." \
+      org.opencontainers.image.licenses="AGPL-3.0"
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates bash python3 curl \
