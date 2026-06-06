@@ -7,6 +7,7 @@ import {
 } from "./api";
 import { renderResult } from "./results/registry";
 import { ChartCard } from "./results/ChartCard";
+import { MovieCard } from "./results/MovieCard";
 import { ImageGrid, QuoteCard } from "./results/extra";
 import { GitHubResults } from "./results/GitHub";
 import {
@@ -85,9 +86,9 @@ function syncURL(query: string, category: string, pageno: number, replace: boole
 // arrayKeys are the per-type result arrays that stream in and get concatenated.
 const ARRAY_KEYS = [
   "results", "answers", "infoboxes", "images", "videos", "papers", "torrents",
-  "maps", "codes", "files", "keyvalues", "quotes", "charts", "suggestions",
+  "maps", "codes", "files", "keyvalues", "quotes", "charts", "movies", "suggestions",
   "corrections", "ghRepos", "ghCode", "ghIssues", "ghUsers", "ghTopics",
-  "ghCommits", "ghDiscussions", "charts", "quotes",
+  "ghCommits", "ghDiscussions",
 ] as const;
 
 // mergeChunk applies a streamed snapshot. The server already did cross-engine
@@ -135,6 +136,16 @@ function mergeChunk(
       return true;
     });
   }
+  // De-dup movie panels by title+year (the movie event can race / repeat).
+  if (result.movies && result.movies.length > 1) {
+    const seen = new Set<string>();
+    result.movies = result.movies.filter((mv) => {
+      const k = `${mv.title}|${mv.year ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
   if (chunk.engine && chunk.elapsed != null) {
     result.timings = [...(result.timings ?? []), { engine: chunk.engine, total: chunk.elapsed }];
   }
@@ -154,6 +165,7 @@ function hasRichResults(r: SearchResponse): boolean {
     r.ghCommits?.length ||
     r.ghDiscussions?.length ||
     r.charts?.length ||
+    r.movies?.length ||
     r.answers?.length ||
     r.images?.length ||
     r.videos?.length ||
@@ -435,6 +447,7 @@ export function App(): React.JSX.Element {
             />
           )}
 
+          {resp.movies?.map((m, i) => <MovieCard movie={m} key={`movie-${i}`} />)}
           {resp.charts?.map((c, i) => <ChartCard chart={c} key={`chart-${i}`} />)}
           {/* standalone quotes (those not already shown inside a chart) */}
           {(resp.quotes ?? [])

@@ -21,9 +21,19 @@ type Config struct {
 	Search  SearchConfig   `yaml:"search"`
 	Server  ServerConfig   `yaml:"server"`
 	Finance FinanceConfig  `yaml:"finance"`
+	Media   MediaConfig    `yaml:"media"`
 	Valkey  ValkeyConfig   `yaml:"valkey"`
 	AI      AIConfig       `yaml:"ai"`
 	Engines []EngineConfig `yaml:"engines"`
+}
+
+// MediaConfig configures the movie/TV knowledge-panel feature.
+type MediaConfig struct {
+	Enabled bool          `yaml:"enabled"`
+	TMDBKey string        `yaml:"tmdb_key"` // required (https://www.themoviedb.org/settings/api)
+	OMDbKey string        `yaml:"omdb_key"` // optional; enables IMDb/RT/Metacritic ratings
+	Region  string        `yaml:"region"`   // ISO country for where-to-watch (default US)
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 // AIConfig configures the optional AI answer-synthesis feature: an LLM reads the

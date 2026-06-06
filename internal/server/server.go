@@ -27,6 +27,7 @@ import (
 	"github.com/searxng/gosearx/internal/engine"
 	"github.com/searxng/gosearx/internal/finance"
 	"github.com/searxng/gosearx/internal/github"
+	"github.com/searxng/gosearx/internal/media"
 	"github.com/searxng/gosearx/internal/metrics"
 	"github.com/searxng/gosearx/internal/preferences"
 	"github.com/searxng/gosearx/internal/proxy"
@@ -58,6 +59,14 @@ type Server struct {
 	// ai powers /api/answer LLM synthesis (nil = disabled).
 	ai     *ai.Service
 	aiAuto bool
+	// media powers the movie/TV knowledge panel (nil = disabled).
+	media *media.Service
+}
+
+// WithMedia attaches the movie/TV knowledge-panel service.
+func (s *Server) WithMedia(m *media.Service) *Server {
+	s.media = m
+	return s
 }
 
 // WithAI attaches the AI answer-synthesis service. auto runs it for every
@@ -233,6 +242,7 @@ type SearchResponse struct {
 	KeyValues     []*result.KeyValue     `json:"keyvalues,omitempty"`
 	Quotes        []*result.Quote        `json:"quotes,omitempty"`
 	Charts        []*result.Chart        `json:"charts,omitempty"`
+	Movies        []*result.Movie        `json:"movies,omitempty"`
 	GHRepos       []*result.GHRepo       `json:"ghRepos,omitempty"`
 	GHCode        []*result.GHCode       `json:"ghCode,omitempty"`
 	GHIssues      []*result.GHIssue      `json:"ghIssues,omitempty"`
@@ -339,6 +349,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// Kick off a finance lookup in parallel if the query looks like a ticker.
 	// Default range is 1d (Google-style); the UI can refetch other ranges.
 	chartCh := s.financeLookup(ctx, parsed.Text, finance.ParseRange(q.Get("range")))
+	// And a movie/TV knowledge-panel lookup in parallel.
+	movieCh := s.mediaLookup(ctx, parsed.Text)
 
 	locale := orDefault(q.Get("locale"), prefs.Language)
 	resp, err := s.searcher.Search(ctx, search.Query{
@@ -363,6 +375,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			if chart.Quote != nil {
 				resp.Quotes = append([]*result.Quote{chart.Quote}, resp.Quotes...)
 			}
+		}
+	}
+	var movies []*result.Movie
+	if movieCh != nil {
+		if mv := <-movieCh; mv != nil {
+			movies = append(movies, mv)
 		}
 	}
 
@@ -391,6 +409,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		KeyValues:    resp.KeyValues,
 		Quotes:       resp.Quotes,
 		Charts:       resp.Charts,
+		Movies:       movies,
 		GHRepos:      resp.GHRepos,
 		GHCode:       resp.GHCode,
 		GHIssues:     resp.GHIssues,
@@ -470,6 +489,15 @@ func (s *Server) handleSearchStream(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			if chart := <-chartCh; chart != nil {
 				send("chart", chart)
+			}
+		}()
+	}
+
+	// Movie/TV knowledge panel runs in parallel and streams when ready.
+	if movieCh := s.mediaLookup(ctx, parsed.Text); movieCh != nil {
+		go func() {
+			if mv := <-movieCh; mv != nil {
+				send("movie", mv)
 			}
 		}()
 	}
@@ -577,6 +605,24 @@ func (s *Server) resolveEngines(p query.Parsed) []*engine.Registered {
 		}
 	}
 	return out
+}
+
+// mediaLookup returns a channel delivering a movie/TV knowledge panel if the
+// query is a film/TV lookup, or nil if media is disabled / nothing matched.
+func (s *Server) mediaLookup(ctx context.Context, queryText string) <-chan *result.Movie {
+	if s.media == nil {
+		return nil
+	}
+	ch := make(chan *result.Movie, 1)
+	go func() {
+		m, err := s.media.Lookup(ctx, queryText)
+		if err != nil || m == nil {
+			ch <- nil
+			return
+		}
+		ch <- m
+	}()
+	return ch
 }
 
 // financeLookup returns a channel delivering a chart if the query is a ticker

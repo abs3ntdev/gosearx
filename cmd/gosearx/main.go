@@ -25,6 +25,7 @@ import (
 	"github.com/searxng/gosearx/internal/engine/loader"
 	"github.com/searxng/gosearx/internal/finance"
 	"github.com/searxng/gosearx/internal/limiter"
+	"github.com/searxng/gosearx/internal/media"
 	"github.com/searxng/gosearx/internal/metrics"
 	"github.com/searxng/gosearx/internal/network"
 	"github.com/searxng/gosearx/internal/plugin"
@@ -147,6 +148,18 @@ func cmdServe(args []string) {
 		srv = srv.WithAI(aiSvc, cfg.AI.Auto)
 		fmt.Fprintf(os.Stderr, "AI synthesis enabled (provider: %s, model: %s, auto: %v)\n",
 			cfg.AI.Provider, cfg.AI.Model, cfg.AI.Auto)
+	}
+	if cfg.Media.Enabled {
+		if ms, err := media.New(media.Config{
+			TMDBKey: cfg.Media.TMDBKey, OMDbKey: cfg.Media.OMDbKey,
+			Region: cfg.Media.Region, Timeout: cfg.Media.Timeout,
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: media (movie/TV) disabled: %v\n", err)
+		} else {
+			srv = srv.WithMedia(ms)
+			fmt.Fprintf(os.Stderr, "media (movie/TV) enabled (region: %s, omdb: %v)\n",
+				cfg.Media.Region, cfg.Media.OMDbKey != "")
+		}
 	}
 	if c := autocomplete.New(cfg.Search.Autocomplete); c != nil {
 		srv = srv.WithAutocomplete(c)

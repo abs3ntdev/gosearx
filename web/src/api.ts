@@ -75,6 +75,47 @@ export interface Chart {
   url?: string;
 }
 
+// --- Movie / TV knowledge panel ---
+export interface MovieRating {
+  source: string; // "IMDb" | "Rotten Tomatoes" | "Metacritic" | "TMDB"
+  value: string;
+}
+export interface MovieCast {
+  name: string;
+  character?: string;
+  photo?: string;
+}
+export interface MovieProvider {
+  name: string;
+  logo?: string;
+  type: "stream" | "rent" | "buy" | "free" | "ads";
+}
+export interface Movie {
+  type: ResultType;
+  engine: string;
+  mediaType: "movie" | "tv";
+  title: string;
+  year?: string;
+  tagline?: string;
+  overview?: string;
+  poster?: string;
+  backdrop?: string;
+  runtime?: string;
+  genres?: string[];
+  status?: string;
+  seasons?: number;
+  episodes?: number;
+  trailerUrl?: string;
+  ratings?: MovieRating[];
+  cast?: MovieCast[];
+  directors?: string[];
+  providers?: MovieProvider[];
+  providerRegion?: string;
+  justWatchUrl?: string;
+  url?: string;
+  imdbUrl?: string;
+}
+
 export const CHART_RANGES = ["1d", "5d", "1mo", "6mo", "ytd", "1y", "5y", "max"] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 
@@ -332,6 +373,7 @@ export interface SearchResponse {
   keyvalues?: KeyValueResult[];
   quotes?: Quote[];
   charts?: Chart[];
+  movies?: Movie[];
   ghRepos?: GHRepo[];
   ghCode?: GHCode[];
   ghIssues?: GHIssue[];
@@ -400,6 +442,13 @@ export function streamSearch(
   es.addEventListener("chart", (e) => {
     try {
       onChunk({ charts: [JSON.parse((e as MessageEvent).data)] });
+    } catch {
+      /* ignore */
+    }
+  });
+  es.addEventListener("movie", (e) => {
+    try {
+      onChunk({ movies: [JSON.parse((e as MessageEvent).data)] });
     } catch {
       /* ignore */
     }

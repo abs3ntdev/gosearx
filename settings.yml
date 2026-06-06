@@ -68,6 +68,17 @@ finance:
   enabled: true
   source: yahoo
 
+# Movie/TV knowledge panel (Google-style): poster, trailer, where-to-watch,
+# ratings (IMDb/Rotten Tomatoes/Metacritic/TMDB), and cast. Triggers on queries
+# like "dune movie", "the office tv show", "oppenheimer trailer".
+# Requires a free TMDB API key. OMDb key is optional (adds IMDb/RT/Metacritic).
+media:
+  enabled: false
+  tmdb_key: "${TMDB_API_KEY}" # https://www.themoviedb.org/settings/api
+  omdb_key: "${OMDB_API_KEY}" # optional; https://www.omdbapi.com/apikey.aspx
+  region: "US" # ISO country for where-to-watch providers
+  timeout: 6s
+
 # Optional AI answer synthesis: an LLM reads the top results and writes a short
 # cited summary. Disabled by default. The default provider is a LOCAL Ollama, so
 # nothing leaves the host unless you configure a remote (openai-compatible) one.

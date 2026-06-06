@@ -23,6 +23,7 @@ const (
 	// New rich types beyond SearXNG's text/image capabilities.
 	TypeQuote Type = "quote" // finance: price + change
 	TypeChart Type = "chart" // time-series / candlestick chart
+	TypeMovie Type = "movie" // movie/TV knowledge panel
 )
 
 // Result is implemented by every concrete result type. Kind() returns the
