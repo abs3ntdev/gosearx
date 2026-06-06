@@ -47,6 +47,41 @@ function applyFilters(query: string, f: SearchFilters): string {
   return parts.filter(Boolean).join(" ");
 }
 
+// ---- URL <-> search-state syncing ------------------------------------------
+// Searches live in the URL (?q=&categories=&pageno=) so the app is shareable,
+// bookmarkable, usable as a browser search engine, and navigable with the
+// browser's back/forward buttons. We canonicalize the results path to /search
+// (SearXNG-compatible); the server serves the SPA for any path.
+
+interface URLState {
+  q: string;
+  category: string;
+  pageno: number;
+}
+
+// readURLState parses the current location's query params. `categories` is the
+// SearXNG-style param name; `category` is accepted as an alias.
+function readURLState(defaultCategory: string): URLState {
+  const p = new URLSearchParams(window.location.search);
+  const pageno = Math.max(1, parseInt(p.get("pageno") || "1", 10) || 1);
+  return {
+    q: p.get("q") ?? "",
+    category: p.get("categories") || p.get("category") || defaultCategory,
+    pageno,
+  };
+}
+
+// syncURL writes the current search into the address bar at /search.
+function syncURL(query: string, category: string, pageno: number, replace: boolean): void {
+  const p = new URLSearchParams();
+  p.set("q", query);
+  if (category && category !== "general") p.set("categories", category);
+  if (pageno > 1) p.set("pageno", String(pageno));
+  const url = `/search?${p.toString()}`;
+  if (replace) window.history.replaceState(null, "", url);
+  else window.history.pushState(null, "", url);
+}
+
 // arrayKeys are the per-type result arrays that stream in and get concatenated.
 const ARRAY_KEYS = [
   "results", "answers", "infoboxes", "images", "videos", "papers", "torrents",
@@ -169,7 +204,18 @@ export function App(): React.JSX.Element {
   }, []);
 
   const runSearch = useCallback(
-    async (overrides?: { q?: string; pageno?: number; category?: string; background?: boolean }) => {
+    async (overrides?: {
+      q?: string;
+      pageno?: number;
+      category?: string;
+      background?: boolean;
+      // replaceHistory: replace the current URL instead of pushing a new entry
+      // (used for filter-driven re-runs and the initial popstate restore).
+      replaceHistory?: boolean;
+      // skipHistory: don't touch the URL at all (used when restoring FROM the
+      // URL via popstate / initial load, so we don't double-push).
+      skipHistory?: boolean;
+    }) => {
       const query = overrides?.q ?? q;
       if (!query.trim()) return;
       const page = overrides?.pageno ?? 1;
@@ -208,6 +254,12 @@ export function App(): React.JSX.Element {
       }
 
       // ---- Foreground (submitted) search ----
+      // Reflect this search in the URL so it is shareable, bookmarkable,
+      // usable as a browser search engine, and navigable with back/forward.
+      if (!overrides?.skipHistory) {
+        syncURL(query, cat, page, overrides?.replaceHistory ?? false);
+      }
+
       // cancel any in-flight foreground stream
       abortRef.current?.abort();
       streamAbortRef.current?.();
@@ -248,11 +300,44 @@ export function App(): React.JSX.Element {
     [q, category, timeRange, language, safesearch, filters],
   );
 
-  // Re-run when filters change (only if a search is active).
+  // Re-run when filters change (only if a search is active). These refine the
+  // current search, so replace the URL rather than push a new history entry.
   useEffect(() => {
-    if (submitted) runSearch({ q: submitted, pageno: 1 });
+    if (submitted) runSearch({ q: submitted, pageno: 1, replaceHistory: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange, language, safesearch, filters]);
+
+  // ---- URL-driven search: initial load + back/forward navigation. ----------
+  // Runs once cfg is available (so we know the default category). Reads the
+  // query from the URL (/search?q=… or /?q=…) and executes it, and restores
+  // state when the user hits back/forward (popstate) — without re-pushing.
+  useEffect(() => {
+    if (!cfg) return;
+    const applyFromURL = (replace: boolean) => {
+      const st = readURLState(cfg.default_category || "general");
+      if (!st.q.trim()) {
+        // No query in the URL => show the landing page.
+        setSubmitted("");
+        setResp(null);
+        return;
+      }
+      setQ(st.q);
+      setCategory(st.category);
+      runSearch({
+        q: st.q,
+        category: st.category,
+        pageno: st.pageno,
+        skipHistory: true,
+        replaceHistory: replace,
+      });
+    };
+    // Initial load: honor a ?q= the user arrived with (search-engine landing).
+    applyFromURL(true);
+    const onPop = () => applyFromURL(false);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg]);
 
   // Debounced pre-search: once a search is active, as the user keeps typing and
   // pauses, warm the cache in the BACKGROUND (does not change the visible

@@ -735,10 +735,10 @@ func (s *Server) handleOpenSearch(w http.ResponseWriter, r *http.Request) {
   <ShortName>` + xmlEscape(name) + `</ShortName>
   <Description>` + xmlEscape(name) + ` metasearch</Description>
   <InputEncoding>UTF-8</InputEncoding>
-  <Url type="text/html" method="get" template="` + base + `/?q={searchTerms}"/>
-  <Url type="application/x-suggestions+json" template="` + base + `/api/autocomplete?q={searchTerms}"/>
+  <Url type="text/html" method="get" template="` + base + `/search?q={searchTerms}"/>
+  <Url type="application/x-suggestions+json" template="` + base + `/autocompleter?q={searchTerms}"/>
   <Url type="application/rss+xml" method="get" template="` + base + `/api/search?q={searchTerms}&amp;format=rss"/>
-  <moz:SearchForm>` + base + `/</moz:SearchForm>
+  <moz:SearchForm>` + base + `/search</moz:SearchForm>
 </OpenSearchDescription>`))
 }
 
