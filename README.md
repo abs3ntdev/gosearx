@@ -1,104 +1,123 @@
 # gosearx
 
-A Go rewrite of [SearXNG](https://github.com/searxng/searxng): a privacy-respecting
-metasearch engine, with first-class **Lua** engines/plugins and a modern
-**React + TypeScript** frontend supporting interactive charts and rich result
-types (finance, time-series, tables) beyond text and images.
+A privacy-respecting metasearch engine written in Go, inspired by
+[SearXNG](https://github.com/searxng/searxng). It aggregates results from ~70
+engines in parallel, scriptable in **Lua, JavaScript, or any executable**, with a
+**React + TypeScript** frontend, optional **AI answer synthesis**, first-class
+**GitHub** search, and an integrated **finance** feature with interactive charts.
 
-> Status: **all planned phases implemented.** Working end-to-end metasearch
-> (parallel engines → merge/dedup/score → JSON API → React UI), three engine
-> tiers (declarative xpath/json + Lua), a Lua plugin system, a traits/locale
-> subsystem, and a pluggable finance feature with interactive charts.
->
-> See `docs/engines.md` and `docs/plugins.md` for authoring guides.
+Ships as a single self-contained binary (the frontend is embedded) — no CGO, no
+runtime dependencies.
 
-## Why a rewrite
+## Highlights
 
-The upstream Python SearXNG is excellent but, for this project's goals, lacks:
-easy plugin development, interactive chart/data display types, and a finance
-(Google Finance-style) integration. This port targets those directly.
+- **~70 engines** across general, images, videos, news, IT, science, files,
+  social, music, and map categories — including google, bing, duckduckgo, brave,
+  startpage, mojeek, wikipedia/wikidata, arxiv, and more.
+- **Multi-language engines & plugins.** Write integrations in:
+  - **Declarative YAML** (xpath/json) — no code,
+  - **Lua** (in-process, sandboxed, pure-Go `gopher-lua`),
+  - **JavaScript** (in-process, sandboxed, pure-Go `goja`, `.mjs`),
+  - **Exec scripts** (bash, python, ruby, node, … via a JSON stdio protocol),
+  - **Native Go** for the perf-critical few.
+- **AI answer synthesis** (optional): an LLM reads the top results and writes a
+  cited summary. Pluggable provider — local **Ollama** by default (private), or
+  any OpenAI-compatible endpoint.
+- **First-class GitHub search:** repos, code, issues/PRs, users, topics, commits,
+  discussions with intent routing, unified ranking, rich cards, README preview,
+  and copy buttons.
+- **Finance:** stock/crypto quotes and interactive candlestick charts
+  (lightweight-charts) with range selection; pluggable datasources (yahoo/stooq).
+- **Instant answers:** calculator, unit/currency conversion, dictionary, IP/DNS,
+  hashes, base/timestamp/color conversion, password/uuid/lorem/roman generators,
+  and more.
+- **Result quality:** cross-engine dedup/scoring, near-duplicate collapsing, and
+  configurable SEO/content-farm down-ranking.
+- **Search filters:** time range, language, safesearch, file type, and
+  site include/exclude.
+- **Production features:** Valkey/Redis caching (in-memory fallback), per-IP
+  limiter, cookie preferences, OpenSearch, metrics/OpenMetrics, autocomplete,
+  image/favicon proxy, and `json`/`csv`/`rss` output.
+- **Modern UI:** React + TypeScript SPA with a Catppuccin Mocha theme and
+  streaming (SSE) results.
 
-## Keystone architectural decision
+## Quick start
 
-**Scripting is the engine substrate, not just a third-party extension point.**
-
-SearXNG already proves the model: its generic `xpath`/`json` engines are pure
-config and back a large share of its 200+ engines. Here:
-
-- **Tier 1 — Declarative (YAML):** xpath/json engines, no code. Covers the majority.
-- **Tier 2 — Lua scripts:** bespoke engines (google, wikidata, …) and plugins.
-  Pure-Go [`gopher-lua`](https://github.com/yuin/gopher-lua) (no CGO → single
-  static binary). Sandboxed; the host performs all I/O.
-- **Tier 3 — Native Go:** the few perf-critical engines.
-
-Adding an engine never requires recompiling Go. This makes "feature parity" and
-"easy plugin development" the *same* effort.
-
-## Scripting language: Lua
-
-Chosen for broad familiarity, mature pure-Go VM, and a simple sync model.
-Tradeoff accepted: porting the Python engines is hand-translation (Starlark would
-have been near-mechanical), but the declarative tier minimizes how many engines
-need Lua at all.
-
-## Phase 0 spike — results
-
-The spike (in `internal/engine/script` + `engines/mojeek.lua`) **validated the
-two biggest risks**:
-
-1. **XPath/HTML parity** (lxml → `antchfx/htmlquery`): a faithful Lua port of
-   SearXNG's Mojeek engine — including nested/relative selectors
-   (`./@href`, `../h2/a`, `..//p[@class="s"]`) and whitespace normalization —
-   produces correct results against **both** a fixture and the **live** Mojeek site.
-2. **Concurrency**: engines run one-goroutine-each. A per-engine **LState pool**
-   with `context` deadlines passes 50-way concurrent stress under `-race`, and a
-   runaway script is correctly killed by its context timeout.
-
-## Run it (Phase 1)
+### Docker (recommended)
 
 ```sh
-# one-shot search across enabled engines (parallel, merged, scored)
-go run ./cmd/gosearx search -q "go programming language"
-
-# select a single engine with a !bang
-go run ./cmd/gosearx search -q "!mj golang"
-
-# build the frontend (embedded into the binary), then serve UI + API
-cd web && npm install && npm run build && cd ..
-go run ./cmd/gosearx serve            # reads settings.yml
-#   GET /                      -> React UI
-#   GET /api/search?q=...&pageno=1&safesearch=0&time_range=
-#   GET /api/engines
-#   GET /healthz
-
-# frontend dev server with API proxy to :8080
-cd web && npm run dev
-
-go test -race ./...
+docker build -t gosearx .
+docker run --rm -p 8080:8080 \
+  -e GITHUB_TOKEN=...  -e BRAVE_API_KEY=... \
+  -v ./settings.yml:/app/settings.yml:ro \
+  gosearx
+# open http://localhost:8080
 ```
 
-## Configuration (`settings.yml`)
+Prebuilt images are published to GHCR on every push to `main`:
 
-A familiar subset of SearXNG's format. Engine *definitions* live in `engines/`;
-this file configures the instance and *overrides* engine metadata by name:
+```sh
+docker run --rm -p 8080:8080 ghcr.io/abs3ntdev/gosearx:latest
+```
+
+Valkey/Redis runs **externally** — point `valkey.url` in `settings.yml` at it
+(e.g. `valkey://host.docker.internal:6379/1`), or leave it empty to use the
+in-memory cache. See `docker-compose.yml` for an example.
+
+### From source
+
+```sh
+make all          # builds the frontend then the Go binary
+./gosearx serve   # reads settings.yml; serves UI + API
+
+# one-shot CLI search (parallel, merged, scored)
+./gosearx search -q "go programming language"
+./gosearx search -q "!gh ripgrep"      # !bang selects an engine/shortcut
+
+# frontend dev server (proxies the API)
+cd web && npm run dev
+```
+
+Requires Go 1.26+ and Node 22+. `make all` runs `npm run build` (embedding the
+SPA) then `go build`.
+
+## Configuration
+
+`settings.yml` configures the instance; engine *definitions* live in `engines/`
+and are overridden here by name. **Secrets are read from the environment** via
+`${VAR}` expansion — never commit credentials:
 
 ```yaml
+general: { instance_name: "gosearx" }
 server: { address: ":8080", engines_dir: engines }
-search: { default_category: general, max_timeout: 15s }
+search:
+  default_category: general
+  collapse_duplicates: true
+valkey:
+  url: "valkey://localhost:6379/1"   # empty => in-memory cache
+ai:
+  enabled: false
+  provider: ollama                   # or openai-compatible
+  model: "llama3.2"
 engines:
-  - name: mojeek
-    weight: 1.0
-    timeout: 3s
-  - name: mojeek-declarative
-    disabled: true
+  - name: braveapi
+    config: { api_key: "${BRAVE_API_KEY}" }
+  - name: github
+    config: { token: "${GITHUB_TOKEN}" }
 ```
 
-## Engine contract (Lua)
+## Writing engines & plugins
+
+Adding an engine or plugin **never requires recompiling** (except native Go).
+Drop a file in `engines/` or `plugins/` and it loads on start.
+
+A Lua engine returns the request (the host performs all I/O) and parses the
+response:
 
 ```lua
 function request(query, params)
   params.url = "https://example.com/search?" .. url.encode({ q = query })
-  return params                      -- host executes the request; engines are pure
+  return params
 end
 
 function response(resp)
@@ -110,87 +129,55 @@ function response(resp)
 end
 ```
 
-Sandboxed API exposed to scripts: `html.parse`, `xpath.{list,first,text,attr,url}`,
-`url.{encode,escape}`, `json.{decode,encode}`, `base64.{encode,decode}`.
-Denied: `os`, `io`, `require`, `load*`, filesystem/network/process access.
+Sandboxed API: `html.parse`, `xpath.{list,first,text,attr,url}`,
+`url.{encode,escape,unescape}`, `json.{decode,encode}`, `base64.{encode,decode}`,
+plus a controlled `http.get`/`http.post` for engines. Denied: filesystem,
+process, and arbitrary network access.
+
+See **[`docs/engines.md`](docs/engines.md)** and
+**[`docs/plugins.md`](docs/plugins.md)** for the full authoring guides (all
+backends), and `engines/hackernews.mjs`, `plugins/morse.mjs`,
+`plugins/weather.sh` for JS/exec examples.
+
+### Custom plugins in Docker
+
+Built-in plugins ship at `/app/plugins`. Mount your own at `/app/custom-plugins`
+(they *add to*, never hide, the built-ins):
+
+```sh
+docker run -p 8080:8080 -v ./my-plugins:/app/custom-plugins:ro gosearx
+```
+
+Exec plugins (`.sh`/`.py`/…) need an interpreter — the default image includes
+`bash`/`python3`/`curl`.
 
 ## Layout
 
 ```
-cmd/gosearx/         CLI: `serve` (API+UI) and `search` (one-shot)
+cmd/gosearx/         CLI: `serve` (API + UI) and `search` (one-shot)
 internal/
-  result/            typed result union (main/image/answer/quote/chart/…)
-  lua/               shared sandboxed Lua env: pool, stdlib, html/xpath bindings
-  engine/            engine contract (Request/Response, no dict mutation)
-    script/          Lua engine tier (uses internal/lua)
-    declarative/     yaml xpath + json engine tiers (zero code)
-    loader/          dispatches .yaml -> declarative, .lua -> script
-  htmlx/             shared lxml-equivalent HTML/XPath helpers
-  plugin/            Lua plugin tier: pre_search/on_result/post_search + storage
-  traits/            locale matching (engine language/region best-fit)
-  finance/           pluggable market-data sources (yahoo, stooq) + detection
-  query/             query parser (!bang, :category)
-  network/           HTTP fetch layer (context timeouts, Fetcher iface)
   search/            orchestrator: parallel engines + merge/dedup/score + plugins
-  server/            JSON API (/api/search, /api/engines, /healthz) + SPA
-  config/            settings.yml loader (+ per-engine overrides, finance)
-engines/   mojeek.{lua,yaml} (same engine both tiers), wikipedia.lua
-plugins/   calculator.lua, tracker_remover.lua, hash.lua
-web/       React + TS app; result-type registry; embedded via embed.FS
+  result/            typed result union (main/image/answer/quote/chart/github/…)
+  engine/            engine contract + tiers:
+    declarative/       yaml xpath + json engines (zero code)
+    script/            Lua engine tier
+    jsscript/          JavaScript (goja) engine tier
+    execengine/        exec/subprocess engine tier
+    loader/            dispatches by file extension
+  plugin/            plugin tiers (native/Lua/JS/exec) + lifecycle hooks
+  jsruntime/         shared sandboxed goja runtime + pool
+  lua/               shared sandboxed Lua env + pool + html/xpath bindings
+  ai/                LLM answer synthesis (ollama / openai-compatible)
+  github/            GitHub intent routing + unified ranking
+  finance/           pluggable market-data sources + ticker detection
+  cache/             Valkey/Redis cache with in-memory fallback
+  network/ query/ traits/ preferences/ limiter/ metrics/ proxy/ bangs/ config/
+engines/             ~70 engine definitions (.yaml/.lua/.mjs/.sh)
+plugins/             plugins (.lua/.mjs/.sh) + native Go plugins in internal/plugin/native
+web/                 React + TS SPA; embedded via embed.FS
   src/results/registry.tsx   maps result type -> component (extensibility point)
-  src/results/ChartCard.tsx  interactive finance chart (lightweight-charts)
-docs/      engines.md, plugins.md  (authoring guides)
+docs/                engines.md, plugins.md (authoring guides)
 ```
-
-## Roadmap
-
-- **Phase 0 — Spikes** ✅ Lua runtime + XPath parity + concurrency.
-- **Phase 1 — Walking skeleton** ✅ query parser (`!bang`/`:category`),
-  parallel orchestrator (goroutines + context + per-engine timeout isolation),
-  result merge/dedup/score/group, declarative **xpath + json** engine tiers,
-  engine registry + loader, **settings.yml** config (enable/disable, weights,
-  timeouts), JSON API (`/api/search`, `/api/engines`, `/healthz`), and a
-  **React + TS frontend** with a result-type registry, embedded into the binary
-  via `embed.FS` (single self-contained executable).
-- **Phase 2 — Scripting substrate + plugins** ✅ shared sandboxed Lua env,
-  plugin hooks (`pre_search`/`on_result`/`post_search`), keyword gating, built-in
-  plugins (calculator, tracker remover, hash); instant-answer mechanism.
-- **Phase 3 — Parity subsystems** ✅ traits/locale best-fit matching, image
-  result type, additional engines across both tiers.
-- **Phase 4 — Finance + rich frontend** ✅ pluggable finance datasource
-  (yahoo/stooq), ticker detection, `quote`/`chart` result types, interactive
-  candlestick charts (lightweight-charts), answer/image components.
-- **Phase 5 — Polish** ✅ engine/plugin authoring docs, Makefile, single-binary
-  self-host (embedded assets via `embed.FS`).
-
-### Production features (ported from the user's SearXNG instance)
-
-- **Output formats:** `?format=json|csv|rss` on `/api/search`.
-- **Autocomplete:** `/api/autocomplete` (backends: google, duckduckgo, brave).
-- **Image proxy:** `/image_proxy?url=…` (privacy: thumbnails fetched server-side).
-- **Favicon resolver:** `/favicon_proxy?host=…` (duckduckgo/google/allesedv/yandex).
-- **Limiter:** per-IP token bucket, trusted-proxy XFF resolution, pass/block
-  IP lists (mirrors the old `limiter.toml`, Pangolin/Traefik setup).
-- **Per-engine config + secrets:** `engines[].config` (e.g. Brave `api_key`).
-- **Template engines:** one engine file backs many configured engines via
-  `engines[].template` (e.g. StackExchange sites, MediaWiki wikis).
-
-### Engines ported so far (~25)
-
-braveapi (API key), google, duckduckgo, github, stackoverflow/askubuntu/superuser,
-mdn, mankier, hoogle, packagist, wiby, bitbucket, pub.dev, rubygems, etymonline,
-habrahabr, lobste.rs, mediawiki (arch/gentoo/wiktionary), wikipedia, mojeek.
-
-### Plugins ported
-
-calculator, unit_converter, hostnames, tracker_remover, hash, and the user's
-custom **eth_checksum** (native Go: EIP-55 + ENS resolution).
-
-### Not yet done (future work)
-
-Bulk-porting the remaining ~195 SearXNG engines (the substrate is ready — this is
-porting-by-data: declarative YAML or short Lua), preferences UI, valkey cache,
-metrics/OpenMetrics, and full i18n. The architecture supports all of these.
 
 ## License
 
