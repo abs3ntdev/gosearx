@@ -22,10 +22,37 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/searxng/gosearx/internal/engine"
 	"github.com/searxng/gosearx/internal/result"
 )
+
+// maxExecOutput bounds a script's stdout to protect the host from OOM.
+const maxExecOutput = 4 << 20
+
+// cappedBuffer stops accumulating after limit bytes and records truncation.
+type cappedBuffer struct {
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if c.buf.Len() >= c.limit {
+		c.truncated = true
+		return len(p), nil
+	}
+	if c.buf.Len()+len(p) > c.limit {
+		c.truncated = true
+		c.buf.Write(p[:c.limit-c.buf.Len()])
+		return len(p), nil
+	}
+	return c.buf.Write(p)
+}
+
+func (c *cappedBuffer) Bytes() []byte  { return c.buf.Bytes() }
+func (c *cappedBuffer) String() string { return c.buf.String() }
 
 // ExecEngine is an engine.Engine backed by an external script.
 type ExecEngine struct {
@@ -77,12 +104,22 @@ func (e *ExecEngine) run(ctx context.Context, payload any) (map[string]any, erro
 		return nil, err
 	}
 	cmd.Stdin = bytes.NewReader(in)
+	// Hermetic env: no inherited secrets leak to the script.
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "GOSEARX_ENGINE=1"}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Own process group + kill the whole group on timeout/cancel.
+	cmd.SysProcAttr = detachedSysProcAttr()
+	cmd.Cancel = func() error { killProcessGroup(cmd); return nil }
+	cmd.WaitDelay = time.Second
+	// Bound output so a runaway script can't OOM the host.
+	stdout := &cappedBuffer{limit: maxExecOutput}
+	stderr := &cappedBuffer{limit: 8 << 10}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("engine %s: %w (%s)", e.name, err, strings.TrimSpace(stderr.String()))
+	}
+	if stdout.truncated {
+		return nil, fmt.Errorf("engine %s: output exceeded %d bytes", e.name, maxExecOutput)
 	}
 	out := bytes.TrimSpace(stdout.Bytes())
 	if len(out) == 0 {

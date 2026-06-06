@@ -1,7 +1,9 @@
 # Writing plugins
 
-A *plugin* hooks into the search lifecycle. Plugins are Lua scripts in the
-`plugins/` directory; they load automatically. No recompile needed.
+A *plugin* hooks into the search lifecycle. Plugins live in the `plugins/`
+directory and load automatically — no recompile needed. They can be written in
+several languages (see [Backends & security](#backends--security)); the examples
+below use Lua, but the hook contract is the same for all.
 
 ## Hooks
 
@@ -65,3 +67,49 @@ Same sandboxed stdlib as engines: `url`, `json`, `base64`, plus `html`/`xpath`
   response (answers, quotes, charts, …).
 
 Plugin errors are isolated: a failing plugin is skipped, never breaks search.
+
+## Backends & security
+
+Plugins are dispatched by file extension:
+
+| Backend | Ext | Where it runs | Isolation |
+|---|---|---|---|
+| Lua | `.lua` | in-process (gopher-lua) | **Sandboxed** — no fs/process/arbitrary-net |
+| JavaScript | `.mjs` | in-process (goja) | **Sandboxed** — no fs/process/net |
+| Native Go | — | compiled in | Full trust (ships in the binary) |
+| Exec script | `.sh` `.py` `.rb` `.pl` `.plugin` | subprocess | **Not sandboxed** (see below) |
+
+JS plugins use camelCase hooks (`preSearch`/`onResult`/`postSearch`) and a
+`keywords` array; otherwise they mirror Lua. Exec plugins speak a JSON protocol
+on stdin/stdout (one object per hook); see `plugins/weather.sh` and the
+`internal/plugin/exec.go` header for the schema.
+
+### Exec plugin security model
+
+Exec plugins run an **arbitrary external program**, so they are powerful and, by
+design, **not sandboxed**: the script executes with the gosearx process's own
+privileges (it can read files the process can read, open sockets, spawn
+processes, etc.). Treat exec plugins like any other operator-supplied code —
+**only install scripts you trust**, the same way you'd trust the binary or
+`settings.yml`.
+
+What the host *does* guarantee, so that a remote searcher can never abuse them:
+
+- **No command/shell injection from queries.** The search query, client IP, and
+  user-agent reach the script **only as JSON on stdin** — never as command-line
+  arguments and never via `sh -c`. A query like `; rm -rf /` is just a string the
+  script reads. *(Verified by `TestExec_NoCommandInjection`.)*
+- **Scrubbed environment.** The child sees only `PATH` and a marker var — your
+  `GITHUB_TOKEN`, `BRAVE_API_KEY`, etc. are **not** inherited.
+  *(`TestExec_EnvScrubbed`.)*
+- **Bounded output.** stdout is capped (4 MiB); a flood is rejected, not OOM'd.
+  *(`TestExec_OutputCap`.)*
+- **Timeout + process-group kill.** Each call has a deadline (default 5s,
+  `@timeout:` overridable); on expiry the whole child process group — including
+  any grandchildren like a hung `sleep` — is SIGKILLed. *(`TestExec_Timeout`.)*
+
+The trust boundary, in short: **a searcher cannot make an exec plugin do
+anything; an operator who installs a malicious plugin can.** If you need to run
+untrusted plugins, prefer the in-process Lua/JS backends (sandboxed), or run the
+container with additional OS-level confinement (read-only rootfs, dropped
+capabilities, seccomp, a non-root user — the image already runs as uid 65532).

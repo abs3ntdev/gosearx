@@ -56,6 +56,34 @@ type ExecPlugin struct {
 	timeout  time.Duration
 }
 
+// maxExecOutput bounds how much a plugin may write to stdout (defense against a
+// runaway script OOMing the host). 4 MiB is far more than any result payload.
+const maxExecOutput = 4 << 20
+
+// cappedBuffer is an io.Writer that stops accumulating after limit bytes and
+// records that truncation occurred.
+type cappedBuffer struct {
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if c.buf.Len() >= c.limit {
+		c.truncated = true
+		return len(p), nil // pretend success; we just drop the overflow
+	}
+	if c.buf.Len()+len(p) > c.limit {
+		c.truncated = true
+		c.buf.Write(p[:c.limit-c.buf.Len()])
+		return len(p), nil
+	}
+	return c.buf.Write(p)
+}
+
+func (c *cappedBuffer) Bytes() []byte  { return c.buf.Bytes() }
+func (c *cappedBuffer) String() string { return c.buf.String() }
+
 // execHook is the request envelope sent to the script.
 type execHook struct {
 	Hook      string         `json:"hook"`
@@ -143,12 +171,23 @@ func (p *ExecPlugin) run(h execHook) (*execReply, error) {
 	cmd.Stdin = bytes.NewReader(in)
 	// Minimal, hermetic environment: no inherited secrets leak to plugins.
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "GOSEARX_PLUGIN=1"}
+	// Run the child in its own process group and, on timeout/cancel, kill the
+	// WHOLE group — otherwise a hung grandchild (e.g. `sleep`) would keep the
+	// call blocked until it finishes despite the deadline.
+	cmd.SysProcAttr = detachedSysProcAttr()
+	cmd.Cancel = func() error { killProcessGroup(cmd); return nil }
+	cmd.WaitDelay = time.Second
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Cap stdout/stderr so a runaway plugin can't OOM the host.
+	stdout := &cappedBuffer{limit: maxExecOutput}
+	stderr := &cappedBuffer{limit: 8 << 10}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("exec plugin %s: %w (%s)", p.name, err, strings.TrimSpace(stderr.String()))
+	}
+	if stdout.truncated {
+		return nil, fmt.Errorf("exec plugin %s: output exceeded %d bytes", p.name, maxExecOutput)
 	}
 	out := bytes.TrimSpace(stdout.Bytes())
 	if len(out) == 0 {
