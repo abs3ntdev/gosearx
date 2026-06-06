@@ -1,0 +1,120 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>gosearx</Name>
+  <Repository>ghcr.io/abs3ntdev/gosearx:latest</Repository>
+  <Registry>https://github.com/abs3ntdev/gosearx/pkgs/container/gosearx</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/abs3ntdev/gosearx/issues</Support>
+  <Project>https://github.com/abs3ntdev/gosearx</Project>
+  <Overview>
+    gosearx — a privacy-respecting metasearch engine written in Go. Aggregates
+    ~70 engines in parallel with scriptable Lua/JS/exec engines and plugins, a
+    React frontend, optional AI answer synthesis (Ollama / OpenAI-compatible),
+    first-class GitHub search, and an integrated finance feature with
+    interactive charts.
+
+    Valkey/Redis is OPTIONAL and runs as a SEPARATE container. Point the
+    VALKEY_URL variable at it (e.g. valkey://valkey:6379/1) to enable shared
+    caching, the rate limiter, and stats. Leave it blank to use an in-memory
+    cache.
+
+    Secrets (GitHub token, Brave API key, OpenAI key) are provided via
+    environment variables — never baked into the image.
+  </Overview>
+  <Category>Tools: Other: Network:Web</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/abs3ntdev/gosearx/main/deploy/unraid/gosearx.xml</TemplateURL>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+
+  <!-- ============================ Web UI port ============================ -->
+  <Config
+    Name="WebUI Port"
+    Target="8080"
+    Default="8080"
+    Mode="tcp"
+    Description="HTTP port for the gosearx web UI and API."
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">8080</Config>
+
+  <!-- ===================== Optional: settings.yml ====================== -->
+  <Config
+    Name="settings.yml (optional)"
+    Target="/app/settings.yml"
+    Default="/mnt/user/appdata/gosearx/settings.yml"
+    Mode="ro"
+    Description="Optional custom settings.yml. Leave the host path empty to use the image's bundled defaults. If you map it, copy the repo's settings.yml first and edit it."
+    Type="Path"
+    Display="always"
+    Required="false"
+    Mask="false"/>
+
+  <!-- =================== Optional: custom plugins dir ================== -->
+  <Config
+    Name="Custom plugins (optional)"
+    Target="/app/custom-plugins"
+    Default="/mnt/user/appdata/gosearx/plugins"
+    Mode="ro"
+    Description="Optional directory of your own plugins (.lua / .mjs / .sh / .py). They ADD to the built-ins. Exec plugins run with bash/python3 available in the image."
+    Type="Path"
+    Display="always"
+    Required="false"
+    Mask="false"/>
+
+  <!-- ========================= Valkey / Redis ========================= -->
+  <Config
+    Name="VALKEY_URL"
+    Target="VALKEY_URL"
+    Default=""
+    Mode=""
+    Description="URL of an EXTERNAL Valkey/Redis (e.g. valkey://valkey:6379/1 or redis://192.168.1.10:6379/1). Leave blank to use an in-memory cache. The host/container must be reachable from this container's network."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false"/>
+
+  <!-- ========================= Secrets (env) ========================== -->
+  <Config
+    Name="GITHUB_TOKEN"
+    Target="GITHUB_TOKEN"
+    Default=""
+    Mode=""
+    Description="GitHub personal access token (read-only is enough). Gives 5000 req/hr and enables code search. Optional."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="BRAVE_API_KEY"
+    Target="BRAVE_API_KEY"
+    Default=""
+    Mode=""
+    Description="Brave Search API key (for the braveapi engine). Optional."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="OPENAI_API_KEY"
+    Target="OPENAI_API_KEY"
+    Default=""
+    Mode=""
+    Description="Only needed if you enable AI synthesis with an OpenAI-compatible provider in settings.yml. Leave blank for local Ollama or disabled AI."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"/>
+</Container>

@@ -60,9 +60,12 @@ Prebuilt images are published to GHCR on every push to `main`:
 docker run --rm -p 8080:8080 ghcr.io/abs3ntdev/gosearx:latest
 ```
 
-Valkey/Redis runs **externally** — point `valkey.url` in `settings.yml` at it
-(e.g. `valkey://host.docker.internal:6379/1`), or leave it empty to use the
-in-memory cache. See `docker-compose.yml` for an example.
+Valkey/Redis runs **externally** — set `VALKEY_URL` (e.g.
+`valkey://valkey:6379/1`), or leave it unset to use the in-memory cache. See
+`docker-compose.yml` for an example.
+
+**Unraid:** see [`deploy/unraid/`](deploy/unraid/) for a Community-Apps template
+and a step-by-step guide.
 
 ### From source
 

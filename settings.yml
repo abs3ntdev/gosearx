@@ -39,7 +39,9 @@ search:
     - social media
 
 server:
-  address: ":9091" # old instance used port 8888
+  # The Docker image overrides this with `-addr :8080` (see CMD). Left here for
+  # bare-metal runs; change freely if you serve directly.
+  address: ":8080"
   engines_dir: engines
   image_proxy: true
   limiter:
@@ -56,9 +58,10 @@ server:
     block_ip: []
 
 # Valkey/Redis: backs the rate limiter, suspended-engine tracking, and stats.
-# Falls back to in-memory automatically if unset or unreachable.
+# Set VALKEY_URL in the environment (e.g. valkey://my-valkey:6379/1). If unset,
+# this expands to empty and gosearx uses an in-memory cache automatically.
 valkey:
-  url: "valkey://localhost:6379/1"
+  url: "${VALKEY_URL}"
 
 # Pluggable finance (new in gosearx, beyond SearXNG): ticker/crypto charts.
 finance:

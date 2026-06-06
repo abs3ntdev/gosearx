@@ -2,10 +2,8 @@
 #
 #   docker compose up -d --build
 #
-# This assumes Valkey/Redis is reachable at the URL in settings.yml's
-# `valkey.url` (e.g. valkey://host.docker.internal:6379/1). If you have no
-# Valkey, leave `valkey.url` empty in settings.yml — gosearx falls back to an
-# in-memory cache automatically.
+# Set VALKEY_URL to reach your Valkey/Redis. Leave it unset to use the in-memory
+# cache automatically. The mounted plugins dir is optional (adds to built-ins).
 
 services:
   gosearx:
@@ -14,15 +12,18 @@ services:
     image: gosearx
     ports:
       - "8080:8080"
-    # Override the bind address / config path if desired:
-    # command: ["serve", "-addr", ":8080", "-config", "/app/settings.yml"]
+    environment:
+      # Point at your external Valkey; unset/empty => in-memory cache.
+      - VALKEY_URL=${VALKEY_URL:-}
+      # Optional secrets (expanded into settings.yml at load):
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
     volumes:
-      # Edit settings (valkey.url, engines, AI, etc.) without rebuilding:
+      # Optional: edit settings (engines, AI, etc.) without rebuilding.
       - ./settings.yml:/app/settings.yml:ro
-      # Mount your own plugins here; they ADD to the built-ins (see README).
-      - ./my-plugins:/app/custom-plugins:ro
-    # On Linux, expose the host to reach a host-run Valkey via
-    # host.docker.internal:
+      # Optional: mount your own plugins; they ADD to the built-ins.
+      # - ./my-plugins:/app/custom-plugins:ro
+    # Lets `host.docker.internal` resolve to the host (e.g. a host-run Valkey).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
