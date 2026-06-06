@@ -317,8 +317,13 @@ a:hover {
   .results-layout {
     grid-template-columns: 1fr;
   }
+  /* Single-column: show the sidebar cards (suggestions/infobox) ABOVE the
+     results so they're seen first on narrow screens. */
   .results-sidebar {
-    order: 1; /* push secondary boxes BELOW results on narrow screens */
+    order: -1;
+  }
+  .results-main {
+    order: 0;
   }
 }
 .results-main {
