@@ -318,11 +318,143 @@ a:hover {
     grid-template-columns: 1fr;
   }
   .results-sidebar {
-    order: -1;
+    order: 1; /* push secondary boxes BELOW results on narrow screens */
   }
 }
 .results-main {
   min-width: 0;
+}
+
+/* ============================================================================
+   Mobile / narrow-screen layout
+   ========================================================================== */
+@media (max-width: 640px) {
+  .results-view {
+    padding: 14px 14px 64px;
+  }
+
+  /* Header: logo + gear on the top row, full-width search below. Nothing clips. */
+  .results-header {
+    flex-wrap: wrap;
+    gap: 12px 14px;
+    align-items: center;
+  }
+  .results-header .logo {
+    font-size: 23px;
+  }
+  .results-header .header-search {
+    order: 3;
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .results-header .prefs-link {
+    margin-left: auto; /* gear hugs the right edge on the logo row */
+  }
+
+  /* Category tabs: scroll horizontally instead of wrapping/clipping. */
+  .category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -webkit-overflow-scrolling: touch;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .category-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .cat-tab {
+    flex: 0 0 auto;
+    padding: 9px 11px;
+  }
+
+  /* Filter bar: also a horizontal scroll strip so the controls don't pile up. */
+  .filter-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 12px;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding: 0 14px 6px;
+  }
+  .filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .filter-bar label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .filter-bar .filter-text input {
+    width: 108px;
+  }
+
+  /* Results: tighter rhythm + smaller display titles, no awkward URL breaks. */
+  .result {
+    padding: 15px 0 15px 14px;
+  }
+  .result-title {
+    font-size: 17.5px;
+  }
+  .result-url {
+    font-size: 11.5px;
+    overflow-wrap: anywhere; /* break long URLs cleanly, not mid-glyph runs */
+    word-break: normal;
+  }
+  .result-content {
+    font-size: 14px;
+  }
+  /* Smaller, but keep the thumbnail beside the text. */
+  .result.has-thumb {
+    gap: 12px;
+  }
+  .result-thumb img {
+    width: 96px;
+    height: 72px;
+  }
+
+  /* AI panel + answers: a touch tighter. */
+  .ai-answer {
+    padding: 13px 14px;
+  }
+  .answer-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 13px 14px;
+  }
+  .answer-link {
+    align-self: flex-end;
+  }
+
+  /* Pagination buttons get comfortable tap targets and don't crowd. */
+  .pagination {
+    gap: 12px;
+    margin: 26px 0;
+  }
+  .pagination button {
+    padding: 10px 16px;
+  }
+
+  /* Preferences page padding. */
+  .prefs-page {
+    padding: 18px 14px 64px;
+  }
+}
+
+/* Landing: scale the oversized wordmark + give the box room on small screens. */
+@media (max-width: 480px) {
+  .app.landing {
+    padding: 14vh 16px 0;
+  }
+  .logo-big {
+    font-size: clamp(48px, 16vw, 72px);
+  }
+  .search-input {
+    font-size: 16px; /* >=16px prevents iOS Safari zoom-on-focus */
+  }
 }
 
 /* ---------- Loading ---------- */
@@ -476,7 +608,7 @@ a:hover {
   font-size: 12px;
   letter-spacing: 0.01em;
   text-decoration: none;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .result-title {
   margin: 4px 0 5px;
