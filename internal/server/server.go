@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -157,23 +158,62 @@ func (s *Server) Handler() http.Handler {
 
 // spaHandler serves embedded static files, falling back to index.html for
 // client-side routes (single-page app behavior).
+//
+// Crucially, the index.html fallback applies ONLY to navigation routes (e.g.
+// /search), never to static-asset requests. A missing asset (a hashed bundle
+// from a stale page, say) must return 404 — NOT index.html — otherwise the
+// browser receives HTML for a `<script>` and fails with a MIME-type error
+// ("Expected a JavaScript module but got text/html"), yielding a blank page.
 func (s *Server) spaHandler() http.Handler {
 	fileServer := http.FileServer(http.FS(s.assets))
+	// serveShell serves index.html with no-cache so a proxy/browser never pins a
+	// stale shell that references hashed bundles no longer in the image.
+	serveShell := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		r2 := r.Clone(r.Context())
+		r2.URL.Path = "/"
+		fileServer.ServeHTTP(w, r2)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/" {
+		if path == "/" || path == "/index.html" {
+			serveShell(w, r)
+			return
+		}
+		if _, err := fs.Stat(s.assets, path[1:]); err == nil {
+			// Hashed assets are content-addressed and immutable — cache hard.
+			if strings.HasPrefix(path, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		// If the requested asset exists, serve it; else serve index.html.
-		if _, err := fs.Stat(s.assets, path[1:]); err != nil {
-			r2 := r.Clone(r.Context())
-			r2.URL.Path = "/"
-			fileServer.ServeHTTP(w, r2)
+		// Missing file. If it looks like a static asset, 404 — do NOT fall back
+		// to index.html (that returns HTML for a <script>, the MIME-type error).
+		if isAssetRequest(path) {
+			http.NotFound(w, r)
 			return
 		}
-		fileServer.ServeHTTP(w, r)
+		// Otherwise it's a client-side route (e.g. /search) — serve the shell.
+		serveShell(w, r)
 	})
+}
+
+// isAssetRequest reports whether a path should be treated as a static asset
+// (so a miss is a 404, not an SPA fallback). Anything under /assets/ or with a
+// common web-asset extension qualifies.
+func isAssetRequest(path string) bool {
+	if strings.HasPrefix(path, "/assets/") {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".js", ".mjs", ".css", ".map", ".json", ".ico", ".png", ".jpg",
+		".jpeg", ".gif", ".svg", ".webp", ".woff", ".woff2", ".ttf", ".otf",
+		".eot", ".wasm", ".txt", ".xml", ".webmanifest":
+		return true
+	}
+	return false
 }
 
 // SearchResponse is the JSON shape returned by /api/search.
