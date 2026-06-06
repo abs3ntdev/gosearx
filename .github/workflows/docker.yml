@@ -63,7 +63,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Build for both common architectures.
-          platforms: linux/amd64,linux/arm64
+          # amd64 only — builds fully native on the runner (no QEMU emulation),
+          # which is what made multi-arch builds take ~8 minutes.
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
