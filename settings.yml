@@ -72,8 +72,10 @@ finance:
 # ratings (IMDb/Rotten Tomatoes/Metacritic/TMDB), and cast. Triggers on queries
 # like "dune movie", "the office tv show", "oppenheimer trailer".
 # Requires a free TMDB API key. OMDb key is optional (adds IMDb/RT/Metacritic).
+# Enabled, but inert until TMDB_API_KEY is set: with no key the service simply
+# logs "disabled" and everything else runs normally.
 media:
-  enabled: false
+  enabled: true
   tmdb_key: "${TMDB_API_KEY}" # https://www.themoviedb.org/settings/api
   omdb_key: "${OMDB_API_KEY}" # optional; https://www.omdbapi.com/apikey.aspx
   region: "US" # ISO country for where-to-watch providers
