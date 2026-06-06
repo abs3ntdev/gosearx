@@ -1,0 +1,8 @@
+name: hoogle
+engine: json
+shortcut: ho
+categories: [it, packages]
+search_url: https://hoogle.haskell.org/?mode=json&hoogle={query}&start={pageno}
+url_query: url
+title_query: item
+content_query: docs

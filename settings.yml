@@ -1,0 +1,251 @@
+# gosearx settings.
+# Secrets (GitHub token, Brave API key, etc.) are read from the environment via
+# ${VAR} expansion — never commit literal credentials here.
+
+general:
+  instance_name: "gosearx"
+
+search:
+  safe_search: 0
+  autocomplete: "google"
+  autocomplete_min: 4
+  favicon_resolver: "duckduckgo"
+  # Per-engine response cache TTL (Valkey-backed, in-memory fallback). Makes
+  # repeat/pre-search queries instant and cuts upstream load. 0 disables.
+  result_cache_ttl: 90s
+  default_category: general
+  max_timeout: 15s
+  # Result-quality passes (new in gosearx). Collapse folds near-identical
+  # results (same host + title); domain_penalties down-ranks content farms
+  # (host -> 0..1 multiplier). Empty domain_penalties uses built-in defaults.
+  collapse_duplicates: true
+  # domain_penalties:
+  #   pinterest.com: 0.3
+  #   example-spam.com: 0.1
+  # html exists implicitly (the SPA); json/csv/rss are API output formats.
+  formats: [html, json, csv, rss]
+  # Category tabs shown in the UI (from the old categories_as_tabs).
+  categories_as_tabs:
+    - general
+    - images
+    - videos
+    - news
+    - map
+    - music
+    - it
+    - github
+    - science
+    - files
+    - social media
+
+server:
+  address: ":9091" # old instance used port 8888
+  engines_dir: engines
+  image_proxy: true
+  limiter:
+    enabled: true
+    link_token: true
+    trusted_proxies:
+      - 127.0.0.0/8
+      - "::1"
+      - 172.19.0.0/12
+    pass_ip:
+      - 192.168.0.0/24
+      - 127.0.0.0/8
+      - "::1"
+    block_ip: []
+
+# Valkey/Redis: backs the rate limiter, suspended-engine tracking, and stats.
+# Falls back to in-memory automatically if unset or unreachable.
+valkey:
+  url: "valkey://localhost:6379/1"
+
+# Pluggable finance (new in gosearx, beyond SearXNG): ticker/crypto charts.
+finance:
+  enabled: true
+  source: yahoo
+
+# Optional AI answer synthesis: an LLM reads the top results and writes a short
+# cited summary. Disabled by default. The default provider is a LOCAL Ollama, so
+# nothing leaves the host unless you configure a remote (openai-compatible) one.
+ai:
+  enabled: false
+  provider: ollama            # "ollama" | "openai" (any OpenAI-compatible API)
+  base_url: "http://localhost:11434"
+  model: "llama3.2"
+  # api_key: "${OPENAI_API_KEY}"   # only for openai-compatible providers
+  top_n: 5                    # number of results fed to the model
+  timeout: 30s
+  auto: false                 # true = summarize every search; false = on request
+
+# Per-engine overrides + secrets. Engine *definitions* live in engines/.
+engines:
+  - name: braveapi
+    weight: 1.0
+    timeout: 5s
+    # Brave Search API key — set BRAVE_API_KEY in the environment.
+    config:
+      api_key: "${BRAVE_API_KEY}"
+
+  # Two definitions ship for mojeek (lua + declarative); keep one active.
+  - name: mojeek-declarative
+    disabled: true
+
+  # StackExchange: stackoverflow.lua is the base; askubuntu/superuser are
+  # instantiated from it via `template`, each with its own api_site.
+  - name: stackoverflow
+    config: { api_site: stackoverflow }
+  - name: askubuntu
+    template: stackoverflow
+    shortcut: ubuntu
+    config: { api_site: askubuntu }
+    categories: [it, q&a]
+  - name: superuser
+    template: stackoverflow
+    shortcut: su
+    config: { api_site: superuser }
+    categories: [it, q&a]
+
+  # Image / video / news engines so those category tabs return real results.
+  - name: openverse
+    categories: [images]
+  - name: googlenews
+    shortcut: gon
+    categories: [news]
+
+  # Wikimedia Commons: one engine file, four media-type instances.
+  - name: wikicommons
+    shortcut: wci
+    config: { media_type: image }
+    categories: [images]
+  - name: wikicommons-videos
+    template: wikicommons
+    shortcut: wcv
+    config: { media_type: video }
+    categories: [videos]
+  - name: wikicommons-audio
+    template: wikicommons
+    shortcut: wca
+    config: { media_type: audio }
+    categories: [music]
+  - name: wikicommons-files
+    template: wikicommons
+    shortcut: wcf
+    config: { media_type: file }
+    categories: [files]
+
+  # DuckDuckGo media: one engine file, three category instances (vqd token).
+  - name: duckduckgo_extra
+    shortcut: ddi
+    config: { ddg_category: images }
+    categories: [images]
+  - name: duckduckgo-videos
+    template: duckduckgo_extra
+    shortcut: ddv
+    config: { ddg_category: videos }
+    categories: [videos]
+  - name: duckduckgo-news
+    template: duckduckgo_extra
+    shortcut: ddn
+    config: { ddg_category: news }
+    categories: [news]
+
+  - name: wikidata
+    weight: 2
+
+  # ---- First-class GitHub integration ----
+  # A token gives 5000 req/hr (vs 60) and enables code search. It is read from
+  # the GITHUB_TOKEN environment variable (gosearx expands ${VARS} at load).
+  # Leave GITHUB_TOKEN unset to run unauthenticated at the lower rate limit.
+  - name: github
+    shortcut: gh
+    categories: [it, repos, github]
+    config:
+      {
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_code
+    shortcut: ghc
+    categories: [it, github]
+    config:
+      {
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_issues
+    shortcut: ghi
+    categories: [it, github]
+    config:
+      {
+        gh_kind: issue,
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_prs
+    template: github_issues
+    shortcut: ghp
+    categories: [it, github]
+    config:
+      {
+        gh_kind: pr,
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_users
+    shortcut: ghu
+    categories: [it, github]
+    config:
+      {
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_commits
+    shortcut: ghx
+    categories: [it, github]
+    config:
+      {
+        token: "${GITHUB_TOKEN}",
+      }
+  - name: github_discussions
+    shortcut: ghd
+    categories: [it, github]
+    config:
+      {
+        token: "${GITHUB_TOKEN}",
+      }
+
+  # wikinews via the mediawiki engine
+  - name: wikinews
+    template: mediawiki
+    shortcut: wn
+    config: { base_url: "https://en.wikinews.org/" }
+    categories: [news]
+
+  # SoundCloud needs a client_id scraped from its web player to return results.
+  # Set it here when you have one; otherwise the engine returns nothing.
+  # - name: soundcloud
+  #   config: { client_id: "YOUR_CLIENT_ID" }
+
+  # Mastodon: accounts (base) + hashtags (template instance).
+  - name: mastodon
+    shortcut: mau
+    config: { base_url: "https://mastodon.social", mastodon_type: accounts }
+    categories: [social media]
+  - name: mastodon-hashtags
+    template: mastodon
+    shortcut: mah
+    config: { base_url: "https://mastodon.social", mastodon_type: hashtags }
+    categories: [social media]
+
+  # MediaWiki wikis: all instantiated from mediawiki.lua via config.base_url.
+  - name: arch-wiki
+    template: mediawiki
+    shortcut: al
+    config: { base_url: "https://wiki.archlinux.org/" }
+    categories: [it]
+  - name: gentoo-wiki
+    template: mediawiki
+    shortcut: ge
+    config: { base_url: "https://wiki.gentoo.org/" }
+    categories: [it]
+  - name: wiktionary
+    template: mediawiki
+    shortcut: wt
+    config: { base_url: "https://en.wiktionary.org/" }
+    categories: [dictionaries]

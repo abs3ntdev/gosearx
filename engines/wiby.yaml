@@ -1,0 +1,9 @@
+name: wiby
+engine: json
+shortcut: wib
+categories: [general, web]
+paging: true
+search_url: https://wiby.me/json/?q={query}&p={pageno}
+url_query: URL
+title_query: Title
+content_query: Snippet

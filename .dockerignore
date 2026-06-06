@@ -1,0 +1,21 @@
+# Keep the build context small and reproducible.
+
+# Local build artifacts (the binary is rebuilt inside the image).
+/gosearx
+*.out
+
+# Frontend deps + prebuilt assets (the `web` stage rebuilds dist from source).
+web/node_modules/
+web/dist/
+
+# VCS / editor / CI noise.
+.git/
+.gitignore
+.github/
+*.md
+docs/
+
+# Docker files themselves don't need to be in the context.
+Dockerfile
+.dockerignore
+docker-compose.yml

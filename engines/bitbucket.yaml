@@ -1,0 +1,9 @@
+name: bitbucket
+engine: xpath
+shortcut: bb
+categories: [it, repos]
+paging: true
+search_url: https://bitbucket.org/repo/all/{pageno}?name={query}
+url_xpath: //article[@class="repo-summary"]//a[@class="repo-link"]/@href
+title_xpath: //article[@class="repo-summary"]//a[@class="repo-link"]
+content_xpath: //article[@class="repo-summary"]/p

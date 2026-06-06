@@ -1,0 +1,10 @@
+name: packagist
+engine: json
+shortcut: pack
+categories: [it, packages]
+paging: true
+search_url: https://packagist.org/search.json?q={query}&page={pageno}
+results_query: results
+url_query: url
+title_query: name
+content_query: description

@@ -1,0 +1,11 @@
+name: pub.dev
+engine: xpath
+shortcut: pd
+categories: [packages, it]
+paging: true
+first_page_num: 1
+search_url: https://pub.dev/packages?q={query}&page={pageno}
+results_xpath: //div[contains(@class,"packages-item")]
+url_xpath: ./div/h3/a/@href
+title_xpath: ./div/h3/a
+content_xpath: ./div/div/div[contains(@class,"packages-description")]/span

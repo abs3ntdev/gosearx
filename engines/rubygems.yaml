@@ -1,0 +1,12 @@
+name: rubygems
+engine: xpath
+shortcut: rbg
+categories: [it, packages]
+paging: true
+first_page_num: 1
+search_url: https://rubygems.org/search?page={pageno}&query={query}
+results_xpath: /html/body/main/div/a[@class="gems__gem"]
+url_xpath: ./@href
+title_xpath: ./span/h2
+content_xpath: ./span/p
+suggestion_xpath: /html/body/main/div/div[@class="search__suggestions"]/p/a

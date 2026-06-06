@@ -1,0 +1,10 @@
+name: habrahabr
+engine: xpath
+shortcut: habr
+categories: [it]
+paging: true
+search_url: https://habr.com/en/search/page{pageno}/?q={query}
+results_xpath: //article[contains(@class, "tm-articles-list__item")]
+url_xpath: .//a[@class="tm-title__link"]/@href
+title_xpath: .//a[@class="tm-title__link"]
+content_xpath: .//div[contains(@class, "article-formatted-body")]

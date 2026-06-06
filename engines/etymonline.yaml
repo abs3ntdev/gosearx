@@ -1,0 +1,10 @@
+name: etymonline
+engine: xpath
+shortcut: et
+categories: [dictionaries]
+paging: true
+first_page_num: 1
+search_url: https://etymonline.com/search?page={pageno}&q={query}
+url_xpath: //a[contains(@class, "word__name--")]/@href
+title_xpath: //a[contains(@class, "word__name--")]
+content_xpath: //section[contains(@class, "word__defination")]

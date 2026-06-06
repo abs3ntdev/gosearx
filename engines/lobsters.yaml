@@ -1,0 +1,9 @@
+name: lobste.rs
+engine: xpath
+shortcut: lo
+categories: [it]
+search_url: https://lobste.rs/search?q={query}&what=stories&order=relevance
+results_xpath: //li[contains(@class, "story")]
+url_xpath: .//a[@class="u-url"]/@href
+title_xpath: .//a[@class="u-url"]
+content_xpath: .//a[@class="domain"]

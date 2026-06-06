@@ -1,0 +1,17 @@
+# Mojeek (general) as a ZERO-CODE declarative engine.
+# Equivalent to engines/mojeek.lua but requires no scripting at all — the same
+# pattern that backs the majority of SearXNG engines via the generic xpath engine.
+name: mojeek-declarative
+engine: xpath
+shortcut: mjd
+categories: [general, web]
+
+search_url: https://www.mojeek.com/search?q={query}
+paging: true
+page_size: 10
+
+results_xpath: '//ul[@class="results-standard"]/li/a[@class="ob"]'
+url_xpath: ./@href
+title_xpath: ../h2/a
+content_xpath: '..//p[@class="s"]'
+suggestion_xpath: '//div[@class="top-info"]/p[@class="top-info spell"]/em/a'

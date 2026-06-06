@@ -1,0 +1,9 @@
+name: mankier
+engine: json
+shortcut: man
+categories: [it]
+search_url: https://www.mankier.com/api/v2/mans/?q={query}
+results_query: results
+url_query: url
+title_query: name
+content_query: description

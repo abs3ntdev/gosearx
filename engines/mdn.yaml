@@ -1,0 +1,11 @@
+name: mdn
+engine: json
+shortcut: mdn
+categories: [it]
+search_url: https://developer.mozilla.org/api/v1/search?q={query}&page={pageno}
+paging: true
+results_query: documents
+url_query: mdn_url
+url_prefix: https://developer.mozilla.org
+title_query: title
+content_query: summary
